@@ -3,11 +3,9 @@ import csv
 
 # linedatamousesの読み込み
 # CSV例: ['uid','wid','time','X','Y','DD','DPos','hLabel','Label','hesitateLabel1','hesitateLabel2','understand']
-fread = open('inputdata/word/少し迷ったと迷ったの区別あり.csv', 'r')
+fread = open('単語単位少し迷ったと迷ったの区別あり.csv', 'r')
 inputData = csv.reader(fread)
-
-
-header = next(inputData)
+next(inputData)
 print('test')
 
 class UTurnChecker: #Uターンの有無の判定
@@ -327,8 +325,37 @@ if parameterCalculator and count > 0:
         print("out")
 
 # CSV出力
-fwrite = open('outputdata/word/outputdata_少し迷ったと迷ったの区別あり.csv','w', newline='')
+fwrite = open('outputdata_単語単位少し迷ったと迷ったの区別あり.csv','w', newline='')
 writer = csv.writer(fwrite, lineterminator='\n')
+header = ['UserId', 'QuestionId', 'WordId', 'hesitate', 'understand', 'DDcount']
+metrics = ['time', 'distance', 'speed', 'stoptime', 'uturnx', 'uturny']
+stats = ['total', 'max', 'min', 'average']
+
+# p1 (通常のDD特徴量) のカラム名作成
+for m in metrics:
+    for s in stats:
+        header.append(s + m)
+    for s in stats:
+        header.append(s + m + 'ratio')
+# DDCountPerQuestion が integrate 関数で最後に2つ追加されているため
+header.extend(['DDCountPerQuestion', 'DDCountPerQuestion2'])
+
+# p2 (DDInterval特徴量) のカラム名作成 (5番目の要素以降)
+# p2[5]はインターバルのDDCount
+header.append('IntervalDDCount') 
+for m in metrics:
+    # Interval系は "TotalIntervalTime" のように "Interval" を挟むことで
+    # classify_word.py が小文字化したときに "totalintervaltime" と一致するようにする
+    metric_name = 'Interval' + m
+    for s in stats:
+        header.append(s + metric_name)
+    for s in stats:
+        header.append(s + metric_name + 'ratio')
+# Intervalの方にも最後にDDCountPerQuestionがついているため
+header.extend(['IntervalDDCountPerQuestion', 'IntervalDDCountPerQuestion2'])
+
+# ヘッダー書き込み
+writer.writerow(header)
 writer.writerows(final)
 fwrite.close()
 

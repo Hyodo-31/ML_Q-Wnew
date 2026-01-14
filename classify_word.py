@@ -234,7 +234,7 @@ def main():
       - (B) 3と4をまとめる (FALSE側)
     各アプローチを 10回繰り返し、iteration×foldごとの結果と平均を出力。
     """
-    output_csv = "outputdata/word_vif/machineLearning_results/evaluation_results_Updated_predictedUnderstand.csv"
+    output_csv = "evaluation_results_Updated_predictedUnderstand.csv"
 
     # CSV初期化 (ヘッダ)
     with open(output_csv, 'w', newline='', encoding='utf-8-sig') as f:
@@ -250,9 +250,8 @@ def main():
         ])
 
     # 読み込むファイル
-    csv_file_name = 'Updated_predictedUnderstand.csv'
-    csv_dir       = 'outputdata/word_vif/'
-    csv_file      = csv_dir + csv_file_name
+    csv_file_name = 'outputdata_単語単位少し迷ったと迷ったの区別あり.csv'
+    csv_file      = csv_file_name
 
     # 特徴量セット
     feature_sets = [
