@@ -31,11 +31,47 @@ for i in range(0, 2):
 		row[4] = int(row[4])
 		row[5] = int(row[5])
 
+		# --- 【修正】SQL順序に基づくデータ読み込み ---
+		# SQLのSELECT順序:
+		# 0:UID, 1:WID, 2:Time, 3:X, 4:Y, 5:DD, 6:DPos, 7:hLabel, 8:Label
+		# 9:register_stick, 10:register_stick_count, 11:stick_now, 12:stick_number1
+		# 13:stick_number2, 14:stick_number_same, 15:stick_composition_count, 16:word_now
+		# 17:repel, 18:repel_count, 19:back, 20:back_count, 21:NOrder
+		# 22:left_X, 23:right_X, 24:Y, 25:incorrect_stick_now, 26:stick_move, 27:stick_same
+		# 28:hesitate, 29:Understand, 30:Date, 31:check
+
+		# 新しい特徴量用データの取得
+		reg_stick_count = int(row[10]) if row[10] != '' else 0
+		stick_comp_count = int(row[15]) if row[15] != '' else 0
+		repel_cnt = int(row[18]) if row[18] != '' else 0
+		back_cnt = int(row[20]) if row[20] != '' else 0
+		# SQLにincorrect_stick(フラグ)がないため、incorrect_stick_now(個数状態)を取得
+		incorrect_now = int(row[25]) if row[25] != '' else 0 
+		stk_same = int(row[27]) if row[27] != '' else 0
+
+		# 既存データの取得位置変更 (テーブル結合により後ろに移動したため)
+		understand_val = row[29]
+		date_val = row[30]
+		check_val = row[31]
+
 		if str(row[0]) not in data.keys():
 			data[str(row[0])] = {}
 		if str(row[1]) not in data[str(row[0])]:
 			data[str(row[0])][str(row[1])] = []
-		data[str(row[0])][str(row[1])].append({'time': row[2], 'x': row[3], 'y': row[4], 'dd': row[5], 'hLabel': row[7], 'label': row[8], 'understand': row[10], 'date': row[11], 'check': row[12]})
+		
+		# 辞書へ格納
+		data[str(row[0])][str(row[1])].append({
+			'time': row[2], 'x': row[3], 'y': row[4], 'dd': row[5], 
+			'hLabel': row[7], 'label': row[8], 
+			'understand': understand_val, 'date': date_val, 'check': check_val,
+			# 新規追加分
+			'reg_stick_count': reg_stick_count,
+			'stick_comp_count': stick_comp_count,
+			'repel_count': repel_cnt,
+			'back_count': back_cnt,
+			'incorrect_stick_now': incorrect_now, # 状態量として保存
+			'stick_same': stk_same
+		})
 	print(testCount)
 	# パラメタを計算していく
 	for user in data.keys():
@@ -62,6 +98,24 @@ for i in range(0, 2):
 			xUTurnCount = 0
 			yUTurnCount = 0
 			groupingDDCount = 0
+
+			# --- 【修正2】新しい特徴量変数の初期化 ---
+			totalGroupFormed = 0      # 単語群ができた回数
+			maxGroupDuration = 0      # 単語群の最大維持時間
+			minGroupDuration = 10000000000 # 単語群の最小維持時間
+			
+			# 単語数ごとの単語群作成数 (2語, 3語, 4語, 5語以上)
+			groupSizeCounts = {2: 0, 3: 0, 4: 0, 5: 0} 
+			
+			timeToFirstGroup = -1     # 初めて単語群が作られるまでの時間
+			
+			totalRepelCount = 0       # 弾かれた総回数
+			totalBackCount = 0        # 枠外に戻された総回数
+			totalIncorrectStick = 0   # 間違った結合をした回数
+			totalStickSame = 0        # 同じ単語群を作成した回数
+
+			# グループ維持時間計算用の一時変数
+			lastGroupFormTime = -1
 			
 			# ここから下は，パラメタを計算するために補助的に使う変数．
 			startTime = -1    # 問題の解答を開始した時刻．（最初のクリック）
@@ -139,6 +193,46 @@ for i in range(0, 2):
 					lastYDirection = yDirection
 				elif yDirection != 0:
 					lastYDirection = yDirection
+				# 1. 単語群作成・更新に関するカウント
+				if params[i]['reg_stick_count'] == 1:
+					totalGroupFormed += 1
+					
+					# 初めて単語群が作られた時間
+					if timeToFirstGroup == -1 and startTime != -1:
+						timeToFirstGroup = params[i]['time'] - startTime
+					
+					# 単語数ごとのカウント
+					comp_count = params[i]['stick_comp_count']
+					if comp_count >= 5:
+						groupSizeCounts[5] += 1
+					elif comp_count in groupSizeCounts:
+						groupSizeCounts[comp_count] += 1
+
+					# 単語群維持時間の計算
+					# 「今回更新された時間」と「前回更新された時間」の差分を維持時間とする
+					if lastGroupFormTime != -1:
+						duration = params[i]['time'] - lastGroupFormTime
+						if duration > maxGroupDuration:
+							maxGroupDuration = duration
+						if duration < minGroupDuration:
+							minGroupDuration = duration
+					
+					lastGroupFormTime = params[i]['time']
+
+				# 2. その他のカウント系
+				if params[i]['repel_count'] == 1:
+					totalRepelCount += 1
+				
+				if params[i]['back_count'] == 1:
+					totalBackCount += 1
+				
+				if params[i+1]['incorrect_stick_now'] > params[i]['incorrect_stick_now']:
+					# 次の時刻で誤答数が増えていれば、誤った結合をしたとみなす
+					diff = params[i+1]['incorrect_stick_now'] - params[i]['incorrect_stick_now']
+					totalIncorrectStick += diff
+
+				if params[i]['stick_same'] > 0: # 回数が入っているので加算するか、1以上ならカウントするか
+					totalStickSame += 1 # ここでは事象の発生回数として+1します（値そのものを足すなら += params[i]['stick_same']）
 
 			# 上のループはlen-1しているので解答の最後の一行には入らない
 			# そのため解答の最後の一行分は別にここで計算（が，これを行うことはないと思う）
@@ -168,9 +262,29 @@ for i in range(0, 2):
 			# 解答時間
 			thinkingTime = startTime - params[0]['time'] #最初の単語をクリックするまでの時間
 			answeringTime = params[-1]['time'] - startTime #最初の単語をクリックしてから決定までの時間
+   
+            # 最小時間が初期値のままなら0にする
+			if minGroupDuration == 10000000000:
+				minGroupDuration = 0
+			if timeToFirstGroup == -1: # 一度も作らなかった場合
+				timeToFirstGroup = 0 # もしくはansweringTimeを入れるなど調整
 
 			tmpParametersPerQuestion.append([user,question,understand,date,check,time,distance,averageSpeed,maxSpeed,thinkingTime,answeringTime,totalStopTime,
-				maxStopTime,totalDDIntervalTime,maxDDIntervalTime,maxDDTime,minDDTime,DDCount,groupingDDCount,xUTurnCount,yUTurnCount])
+				maxStopTime,totalDDIntervalTime,maxDDIntervalTime,maxDDTime,minDDTime,DDCount,groupingDDCount,xUTurnCount,yUTurnCount,
+                # -- 追加分 --
+				totalGroupFormed,   # 21
+				maxGroupDuration,   # 22
+				minGroupDuration,   # 23
+				groupSizeCounts[2], # 24 (2語グループ)
+				groupSizeCounts[3], # 25 (3語グループ)
+				groupSizeCounts[4], # 26 (4語グループ)
+				groupSizeCounts[5], # 27 (5語以上)
+				timeToFirstGroup,   # 28
+				totalRepelCount,    # 29
+				totalBackCount,     # 30
+				totalIncorrectStick,# 31
+				totalStickSame      # 32
+            ])
 
 	parametersPerQuestion.extend(tmpParametersPerQuestion)			
 
