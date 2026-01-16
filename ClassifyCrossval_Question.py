@@ -68,6 +68,9 @@ selectedParameters = [
 	#(35, 'maxStickNum1'),        # stick_number1 最大値 (作成されたグループの総数ID) これ作ったけど意味なかったかも
 	(36, 'totalStickNum2Count'), # stick_number2 出現回数
 	#(37, 'maxStickNum2'),        # stick_number2 最大値 (最も多く更新された回数)
+    (38, 'totalGroupIntervalTime'), # 生成間時間の総和
+	(39, 'maxGroupIntervalTime'),   # 最大生成間時間 (思考時間?)
+	(40, 'minGroupIntervalTime'),   # 最小生成間時間 (連続操作?)
 ]
 
 

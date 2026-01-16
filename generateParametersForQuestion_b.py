@@ -114,7 +114,13 @@ for i in range(0, 2):
 			totalGroupFormed = 0      # 単語群ができた回数
 			maxGroupDuration = 0      # 単語群の最大維持時間
 			minGroupDuration = 10000000000 # 単語群の最小維持時間
-			
+   
+            # 単語群生成間時間用の変数
+			totalGroupIntervalTime = 0 # 間隔の総和
+			maxGroupIntervalTime = 0   # 最大間隔
+			minGroupIntervalTime = 10000000000 # 最小間隔
+			lastGroupCreationTime = -1 # 直前の生成時刻保持用
+   		
 			# 単語数ごとの単語群作成数 (2語, 3語, 4語, 5語以上)
 			groupSizeCounts = {2: 0, 3: 0, 4: 0, 5: 0} 
 			
@@ -221,6 +227,21 @@ for i in range(0, 2):
 				# 1. 単語群作成・更新に関するカウント
 				if params[i]['reg_stick_count'] == 1:
 					totalGroupFormed += 1
+     
+                # ★追加: 生成間時間の計算 (2回目以降の生成時のみ計算可能)
+					if lastGroupCreationTime != -1:
+						interval = params[i]['time'] - lastGroupCreationTime
+						
+						totalGroupIntervalTime += interval
+						
+						if interval > maxGroupIntervalTime:
+							maxGroupIntervalTime = interval
+						
+						if interval < minGroupIntervalTime:
+							minGroupIntervalTime = interval
+					
+					# 時刻を更新
+					lastGroupCreationTime = params[i]['time']
 					
 					# 初めて単語群が作られた時間
 					if timeToFirstGroup == -1 and startTime != -1:
@@ -311,6 +332,8 @@ for i in range(0, 2):
             # 最小時間が初期値のままなら0にする
 			if minGroupDuration == 10000000000:
 				minGroupDuration = 0
+            # 未定義値の調整
+			if minGroupIntervalTime == 10000000000: minGroupIntervalTime = 0 # ★追加
 			if timeToFirstGroup == -1: # 一度も作らなかった場合
 				timeToFirstGroup = 0 # もしくはansweringTimeを入れるなど調整
 
@@ -333,7 +356,10 @@ for i in range(0, 2):
 				totalStickNum1Count,# 34
 				maxStickNum1,       # 35
 				totalStickNum2Count,# 36
-				maxStickNum2        # 37
+				maxStickNum2,        # 37
+                totalGroupIntervalTime, # 38
+				maxGroupIntervalTime,   # 39
+				minGroupIntervalTime    # 40
             ])
 
 	parametersPerQuestion.extend(tmpParametersPerQuestion)			
