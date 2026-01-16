@@ -62,7 +62,12 @@ selectedParameters = [
 	(29, 'totalRepelCount'),     # 弾かれた回数
 	(30, 'totalBackCount'),      # 枠外に戻された回数
 	(31, 'totalIncorrectStick'), # 間違った結合数
-	(32, 'totalStickSame'),      # 同じ単語群の再作成数
+    #(32, 'maxIncorrectStick'),   # 誤答結合の最大同時個数
+	(33, 'totalStickSame'),      # 同じ単語群の再作成数
+    (34, 'totalStickNum1Count'), # stick_number1 出現回数
+	#(35, 'maxStickNum1'),        # stick_number1 最大値 (作成されたグループの総数ID) これ作ったけど意味なかったかも
+	(36, 'totalStickNum2Count'), # stick_number2 出現回数
+	#(37, 'maxStickNum2'),        # stick_number2 最大値 (最も多く更新された回数)
 ]
 
 

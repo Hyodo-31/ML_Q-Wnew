@@ -39,6 +39,11 @@ for i in range(0, 2):
 		# 17:repel, 18:repel_count, 19:back, 20:back_count, 21:NOrder
 		# 22:left_X, 23:right_X, 24:Y, 25:incorrect_stick_now, 26:stick_move, 27:stick_same
 		# 28:hesitate, 29:Understand, 30:Date, 31:check
+  
+        # --- 【修正】stick_number1, stick_number2 の読み込み ---
+		# SQL: 12:stick_number1, 13:stick_number2
+		stick_num1 = int(row[12]) if row[12] != '' else 0
+		stick_num2 = int(row[13]) if row[13] != '' else 0
 
 		# 新しい特徴量用データの取得
 		reg_stick_count = int(row[10]) if row[10] != '' else 0
@@ -70,7 +75,9 @@ for i in range(0, 2):
 			'repel_count': repel_cnt,
 			'back_count': back_cnt,
 			'incorrect_stick_now': incorrect_now, # 状態量として保存
-			'stick_same': stk_same
+			'stick_same': stk_same,
+            'stick_num1': stick_num1,
+			'stick_num2': stick_num2
 		})
 	print(testCount)
 	# パラメタを計算していく
@@ -98,6 +105,10 @@ for i in range(0, 2):
 			xUTurnCount = 0
 			yUTurnCount = 0
 			groupingDDCount = 0
+			totalStickNum1Count = 0   # stick_number1 の出現回数
+			maxStickNum1 = 0          # stick_number1 の最大値
+			totalStickNum2Count = 0   # stick_number2 の出現回数
+			maxStickNum2 = 0          # stick_number2 の最大値
 
 			# --- 【修正2】新しい特徴量変数の初期化 ---
 			totalGroupFormed = 0      # 単語群ができた回数
@@ -110,10 +121,10 @@ for i in range(0, 2):
 			timeToFirstGroup = -1     # 初めて単語群が作られるまでの時間
 			
 			totalRepelCount = 0       # 弾かれた総回数
-			totalBackCount = 0        # 枠外に戻された総回数
-			totalIncorrectStick = 0   # 間違った結合をした回数
+			totalBackCount = 0        # 枠外に戻された総回数 
+			totalIncorrectStick = 0 # 累積回数 
+			maxIncorrectStick = 0   # 最大同時個数 
 			totalStickSame = 0        # 同じ単語群を作成した回数
-
 			# グループ維持時間計算用の一時変数
 			lastGroupFormTime = -1
 			
@@ -193,6 +204,20 @@ for i in range(0, 2):
 					lastYDirection = yDirection
 				elif yDirection != 0:
 					lastYDirection = yDirection
+                # stick_number1 (新規作成ID)
+				s1 = params[i]['stick_num1']
+				if s1 > 0:
+					totalStickNum1Count += 1
+					if s1 > maxStickNum1:
+						maxStickNum1 = s1
+				
+				# stick_number2 (更新ID)
+				s2 = params[i]['stick_num2']
+				if s2 > 0:
+					totalStickNum2Count += 1
+					if s2 > maxStickNum2:
+						maxStickNum2 = s2
+
 				# 1. 単語群作成・更新に関するカウント
 				if params[i]['reg_stick_count'] == 1:
 					totalGroupFormed += 1
@@ -230,6 +255,11 @@ for i in range(0, 2):
 					# 次の時刻で誤答数が増えていれば、誤った結合をしたとみなす
 					diff = params[i+1]['incorrect_stick_now'] - params[i]['incorrect_stick_now']
 					totalIncorrectStick += diff
+     
+                # 2. 最大同時個数 (maxIncorrectStick)
+				# その時点の値が最大値を超えていれば更新
+				if params[i]['incorrect_stick_now'] > maxIncorrectStick:
+					maxIncorrectStick = params[i]['incorrect_stick_now']
 
 				if params[i]['stick_same'] > 0: # 回数が入っているので加算するか、1以上ならカウントするか
 					totalStickSame += 1 # ここでは事象の発生回数として+1します（値そのものを足すなら += params[i]['stick_same']）
@@ -256,7 +286,22 @@ for i in range(0, 2):
 			#グルーピング回数 矩形選択して動かしたやつ（違うところに移動させてないのも含む）
 			if params[-1]['dd'] == 2 and '#' in params[-1]['label']:
 				groupingDDCount += 1
-
+            # ループ後は最後の1行分の処理で念のためstick_numberもチェック
+			s1_last = params[-1]['stick_num1']
+			if s1_last > 0:
+				totalStickNum1Count += 1
+				if s1_last > maxStickNum1:
+					maxStickNum1 = s1_last
+			
+			s2_last = params[-1]['stick_num2']
+			if s2_last > 0:
+				totalStickNum2Count += 1
+				if s2_last > maxStickNum2:
+					maxStickNum2 = s2_last
+     
+			last_incorrect = params[-1]['incorrect_stick_now']
+			if last_incorrect > maxIncorrectStick:
+				maxIncorrectStick = last_incorrect
 			# 平均速度
 			averageSpeed = distance*1.0 / time
 			# 解答時間
@@ -282,8 +327,13 @@ for i in range(0, 2):
 				timeToFirstGroup,   # 28
 				totalRepelCount,    # 29
 				totalBackCount,     # 30
-				totalIncorrectStick,# 31
-				totalStickSame      # 32
+				totalIncorrectStick,# 31 (累積)
+				maxIncorrectStick,  # 32 (最大値)
+				totalStickSame,     # 33 (1つ後ろにずれる)
+				totalStickNum1Count,# 34
+				maxStickNum1,       # 35
+				totalStickNum2Count,# 36
+				maxStickNum2        # 37
             ])
 
 	parametersPerQuestion.extend(tmpParametersPerQuestion)			
