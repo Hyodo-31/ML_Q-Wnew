@@ -38,16 +38,16 @@ selectedParameters = [
 	(6 , 'distance'),
 	(7 , 'averageSpeed'),
 	# (8 , 'maxSpeed'), #
-	# (9 , 'thinkingTime'), #
-	# (10 , 'answeringTime'), #
-	# (11, 'totalStopTime'), #
+	(9 , 'thinkingTime'), #
+	(10 , 'answeringTime'), #
+	(11, 'totalStopTime'), #
 	(12, 'maxStopTime '),
 	# (13, 'totalDDIntervalTime '), #
 	(14, 'maxDDIntervalTime '),
 	(15, 'maxDDTime'),
 	# (16, 'minDDTime'), #
 	(17, 'DDCount'),
-	(18, 'groupingDDCount'),
+	#(18, 'groupingDDCount'),
 	(19, 'xUTurnCount'),
 	(20, 'yUTurnCount'),
  # --- 【修正】ここから新しい特徴量を追加 ---
@@ -55,15 +55,15 @@ selectedParameters = [
 	(22, 'maxGroupDuration'),    # 単語群の最大維持時間
 	(23, 'minGroupDuration'),    # 単語群の最小維持時間
 	(24, 'groupSizeCount_2'),    # 2語の単語群作成数
-	(25, 'groupSizeCount_3'),    # 3語の単語群作成数
-	(26, 'groupSizeCount_4'),    # 4語の単語群作成数
-	(27, 'groupSizeCount_5plus'), # 5語以上（必要に応じてコメントアウト解除）
+	#(25, 'groupSizeCount_3'),    # 3語の単語群作成数
+	#(26, 'groupSizeCount_4'),    # 4語の単語群作成数
+	#(27, 'groupSizeCount_5plus'), # 5語以上（必要に応じてコメントアウト解除）
 	(28, 'timeToFirstGroup'),    # 初めて単語群ができるまでの時間
 	(29, 'totalRepelCount'),     # 弾かれた回数
-	(30, 'totalBackCount'),      # 枠外に戻された回数
+	#(30, 'totalBackCount'),      # 枠外に戻された回数
 	(31, 'totalIncorrectStick'), # 間違った結合数
     #(32, 'maxIncorrectStick'),   # 誤答結合の最大同時個数
-	(33, 'totalStickSame'),      # 同じ単語群の再作成数
+	#(33, 'totalStickSame'),      # 同じ単語群の再作成数
     (34, 'totalStickNum1Count'), # stick_number1 出現回数
 	#(35, 'maxStickNum1'),        # stick_number1 最大値 (作成されたグループの総数ID) これ作ったけど意味なかったかも
 	(36, 'totalStickNum2Count'), # stick_number2 出現回数
