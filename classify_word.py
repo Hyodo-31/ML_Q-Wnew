@@ -234,7 +234,7 @@ def main():
       - (B) 3と4をまとめる (FALSE側)
     各アプローチを 10回繰り返し、iteration×foldごとの結果と平均を出力。
     """
-    output_csv = "evaluation_results_Updated_predictedUnderstand.csv"
+    output_csv = "単語単位推定結果.csv"
 
     # CSV初期化 (ヘッダ)
     with open(output_csv, 'w', newline='', encoding='utf-8-sig') as f:
@@ -254,19 +254,41 @@ def main():
     csv_file      = csv_file_name
 
     # 特徴量セット
+    # 既存の特徴量に加え、新規特徴量（TotalとMax）を追加
+    new_features = [
+        # --- DD（ドロップ時）の新規特徴量 ---
+        'groupformcount',      # 単語群化した回数（Total）
+        'registerstickcount',  # register_stick_countが記録された回数（Total）
+        'totalgroupformtime',  # 単語群化経験時の合計時間
+        'maxgroupformtime',    # 単語群化経験時の最大時間
+        'maxcomposition',      # 構成単語数の最大値
+        'incorrectcount',      # 不正解スティックになった回数（Total）
+        'totalincorrecttime',  # 不正解スティック経験時の合計時間
+        'maxincorrecttime',    # 不正解スティック経験時の最大時間
+
+        # --- Interval（ドラッグ中）の新規特徴量 ---
+        'intervalgroupformcount',
+        'intervalregisterstickcount',
+        'totalintervalgroupformtime',
+        'maxintervalgroupformtime',
+        'intervalmaxcomposition',
+        'intervalincorrectcount',
+        'totalintervalincorrecttime',
+        'maxintervalincorrecttime'
+    ]
     feature_sets = [
         {
             'name': 'understand追加前',
             'type': 'specific',
             'columns': ['totaltime','totaldistance','minspeed','totalstoptime',
-                        'totaluturnx','totaluturny','totalintervaltime'],
+                        'totaluturnx','totaluturny','totalintervaltime'] + new_features,
             'exclude_columns': []
         },
         {
             'name': 'understand追加後',
             'type': 'specific',
             'columns': ['understand','totaltime','totaldistance','minspeed','totalstoptime',
-                        'totaluturnx','totaluturny','totalintervaltime'],
+                        'totaluturnx','totaluturny','totalintervaltime'] + new_features,
             'exclude_columns': []
         }
     ]
