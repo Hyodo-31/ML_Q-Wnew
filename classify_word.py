@@ -164,68 +164,24 @@ def load_and_preprocess_merge3and4(csv_file, feature_set, label_column='hesitate
     return X_balanced, y_balanced, feature_columns
 
 
-def do_10fold_evaluation(X, y, iteration, feature_set_name, output_csv):
+# 特徴量重要度を表示するヘルパー関数
+def print_feature_importance(importance_arr, feature_names, title="Feature Importance", top_n=15):
     """
-    1回分の 10-Fold 交差検証を行い、
-    (iteration, fold, class_label, precision, recall, f1)を
-    CSVに書き込みつつ、foldごとの指標をreturnする。
+    特徴量重要度を降順にソートして表示する関数
     """
-    skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+    # データフレーム化してソート
+    if feature_names is None or len(feature_names) == 0:
+        return
+
+    df_imp = pd.DataFrame({
+        'Feature': feature_names,
+        'Importance': importance_arr
+    })
+    df_imp = df_imp.sort_values(by='Importance', ascending=False).reset_index(drop=True)
     
-    # ランダムフォレスト
-    model = RandomForestClassifier(random_state=42)
-    # SVCを使用する場合はコメントアウト解除
-    #model = SVC(random_state=42)
-
-    fold_prec0 = []
-    fold_rec0  = []
-    fold_f0    = []
-    fold_prec1 = []
-    fold_rec1  = []
-    fold_f1_   = []
-
-    fold_index = 1
-    for train_idx, test_idx in skf.split(X, y):
-        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
-        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-
-        prec = precision_score(y_test, y_pred, average=None, zero_division=0)
-        rec  = recall_score(y_test, y_pred, average=None, zero_division=0)
-        f    = f1_score(y_test, y_pred, average=None, zero_division=0)
-
-        fold_prec0.append(prec[0])
-        fold_rec0.append(rec[0])
-        fold_f0.append(f[0])
-        fold_prec1.append(prec[1])
-        fold_rec1.append(rec[1])
-        fold_f1_.append(f[1])
-
-        # CSV出力 (クラス0 / クラス1)
-        with open(output_csv, 'a', newline='', encoding='utf-8-sig') as f_out:
-            writer = csv.writer(f_out)
-            writer.writerow([
-                feature_set_name, 
-                f"{iteration}", 
-                f"{fold_index}", 
-                "クラス0(=FALSE)",
-                prec[0], rec[0], f[0]
-            ])
-            writer.writerow([
-                feature_set_name, 
-                f"{iteration}", 
-                f"{fold_index}", 
-                "クラス1(=TRUE)",
-                prec[1], rec[1], f[1]
-            ])
-
-        fold_index += 1
-    
-    return (fold_prec0, fold_rec0, fold_f0,
-            fold_prec1, fold_rec1, fold_f1_)
-
+    print(f"\n--- {title} (Top {top_n}) ---")
+    print(df_imp.head(top_n).to_string(index=False))
+    print("-" * 40)
 
 def main():
     """
@@ -233,6 +189,7 @@ def main():
       - (A) 3を除外する (従来の処理)
       - (B) 3と4をまとめる (FALSE側)
     各アプローチを 10回繰り返し、iteration×foldごとの結果と平均を出力。
+    さらに、各イテレーションと最終結果で特徴量重要度を表示する。
     """
     output_csv = "単語単位推定結果.csv"
 
@@ -301,7 +258,6 @@ def main():
         # --------------------------------------------------
         # (A) 従来どおり: 3は除外, 2⇒1, 4⇒0
         # --------------------------------------------------
-        # 結果をまとめるリスト
         iteration_prec0_list_A = []
         iteration_rec0_list_A  = []
         iteration_f0_list_A    = []
@@ -309,7 +265,12 @@ def main():
         iteration_rec1_list_A  = []
         iteration_f1_list_A    = []
 
+        # ★重要度の全体平均用変数
+        final_feature_importances_A = None
+        feature_names_A = None
+
         for i in range(1, n_repeat+1):
+            # データ読み込み
             X_bal, y_bal, selected_cols = load_and_preprocess_exclude3(
                 csv_file=csv_file,
                 feature_set=feature_set,
@@ -317,14 +278,44 @@ def main():
                 iteration=i
             )
 
-            # 10fold
-            (fold_prec0, fold_rec0, fold_f0,
-             fold_prec1, fold_rec1, fold_f1_) = do_10fold_evaluation(
-                X_bal, y_bal, i,
-                feature_set['name'] + " (excl3)",  # CSVに書き出す際の名前を区別
-                output_csv
-            )
+            # 初回のみ特徴量名を保存・配列初期化
+            if feature_names_A is None:
+                feature_names_A = X_bal.columns.tolist()
+                final_feature_importances_A = np.zeros(len(feature_names_A))
 
+            # 10-fold CV (手動展開)
+            skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=i)
+            
+            fold_prec0, fold_rec0, fold_f0 = [], [], []
+            fold_prec1, fold_rec1, fold_f1_ = [], [], []
+            
+            # ★このイテレーションでの重要度蓄積用
+            iteration_importances = np.zeros(len(feature_names_A))
+
+            for fold_idx, (train_index, test_index) in enumerate(skf.split(X_bal, y_bal)):
+                X_train, X_test = X_bal.iloc[train_index], X_bal.iloc[test_index]
+                y_train, y_test = y_bal.iloc[train_index], y_bal.iloc[test_index]
+
+                # 学習
+                clf = RandomForestClassifier(n_estimators=100, random_state=i)
+                clf.fit(X_train, y_train)
+                y_pred = clf.predict(X_test)
+
+                # ★重要度の加算
+                if hasattr(clf, 'feature_importances_'):
+                    iteration_importances += clf.feature_importances_
+
+                # 評価指標計算 (Class0)
+                fold_prec0.append(precision_score(y_test, y_pred, pos_label=0, zero_division=0))
+                fold_rec0.append(recall_score(y_test, y_pred, pos_label=0, zero_division=0))
+                fold_f0.append(f1_score(y_test, y_pred, pos_label=0, zero_division=0))
+                
+                # 評価指標計算 (Class1)
+                fold_prec1.append(precision_score(y_test, y_pred, pos_label=1, zero_division=0))
+                fold_rec1.append(recall_score(y_test, y_pred, pos_label=1, zero_division=0))
+                fold_f1_.append(f1_score(y_test, y_pred, pos_label=1, zero_division=0))
+
+            # イテレーションごとの平均スコア
             avg_p0 = np.mean(fold_prec0)
             avg_r0 = np.mean(fold_rec0)
             avg_f0 = np.mean(fold_f0)
@@ -332,10 +323,7 @@ def main():
             avg_r1 = np.mean(fold_rec1)
             avg_f1_ = np.mean(fold_f1_)
 
-            print(f"\n[iteration {i}] 10fold平均 (Exclude3)")
-            print(f"  クラス0(FALSE): P={avg_p0:.4f}, R={avg_r0:.4f}, F={avg_f0:.4f}")
-            print(f"  クラス1(TRUE):  P={avg_p1:.4f}, R={avg_r1:.4f}, F={avg_f1_:.4f}")
-
+            # リストに追加
             iteration_prec0_list_A.append(avg_p0)
             iteration_rec0_list_A.append(avg_r0)
             iteration_f0_list_A.append(avg_f0)
@@ -343,7 +331,18 @@ def main():
             iteration_rec1_list_A.append(avg_r1)
             iteration_f1_list_A.append(avg_f1_)
 
-            # CSVに iteration単位の平均を追加 (fold名: avg_of_10folds)
+            # ★重要度の平均化 (10-fold分) と表示
+            avg_iter_imp = iteration_importances / 10.0
+            final_feature_importances_A += avg_iter_imp # 全体累積に加算
+
+            print(f"\n[iteration {i}] 10fold平均 (Exclude3)")
+            print(f"  クラス0(FALSE): P={avg_p0:.4f}, R={avg_r0:.4f}, F={avg_f0:.4f}")
+            print(f"  クラス1(TRUE):  P={avg_p1:.4f}, R={avg_r1:.4f}, F={avg_f1_:.4f}")
+            
+            # イテレーション時点での重要度表示
+            print_feature_importance(avg_iter_imp, feature_names_A, title=f"Iter {i} Importance (Excl3)")
+
+            # CSV出力 (iteration平均)
             with open(output_csv, 'a', newline='', encoding='utf-8-sig') as f_out:
                 writer = csv.writer(f_out)
                 writer.writerow([
@@ -361,7 +360,7 @@ def main():
                     avg_p1, avg_r1, avg_f1_
                 ])
 
-        # 全iteration(10回)の平均
+        # 全iteration(10回)のスコア平均
         final_p0_A = np.mean(iteration_prec0_list_A)
         final_r0_A = np.mean(iteration_rec0_list_A)
         final_f0_A = np.mean(iteration_f0_list_A)
@@ -369,10 +368,17 @@ def main():
         final_r1_A = np.mean(iteration_rec1_list_A)
         final_f1_A = np.mean(iteration_f1_list_A)
 
+        # ★重要度の最終平均と表示
+        avg_final_imp_A = final_feature_importances_A / n_repeat
+        
         print(f"\n=== (Exclude3) {feature_set['name']} : 全iteration(10回)の平均 ===")
         print(f"  クラス0(FALSE): P={final_p0_A:.4f}, R={final_r0_A:.4f}, F={final_f0_A:.4f}")
         print(f"  クラス1(TRUE):  P={final_p1_A:.4f}, R={final_r1_A:.4f}, F={final_f1_A:.4f}")
+        
+        # 最終重要度表示
+        print_feature_importance(avg_final_imp_A, feature_names_A, title=f"FINAL AVG Importance (Excl3)")
 
+        # CSV出力 (最終平均)
         with open(output_csv, 'a', newline='', encoding='utf-8-sig') as f_out:
             writer = csv.writer(f_out)
             writer.writerow([
@@ -400,6 +406,10 @@ def main():
         iteration_rec1_list_B  = []
         iteration_f1_list_B    = []
 
+        # ★重要度の全体平均用変数
+        final_feature_importances_B = None
+        feature_names_B = None
+
         for i in range(1, n_repeat+1):
             X_bal, y_bal, selected_cols = load_and_preprocess_merge3and4(
                 csv_file=csv_file,
@@ -408,12 +418,37 @@ def main():
                 iteration=i
             )
 
-            (fold_prec0, fold_rec0, fold_f0,
-             fold_prec1, fold_rec1, fold_f1_) = do_10fold_evaluation(
-                X_bal, y_bal, i,
-                feature_set['name'] + " (merge3_4)",
-                output_csv
-            )
+            if feature_names_B is None:
+                feature_names_B = X_bal.columns.tolist()
+                final_feature_importances_B = np.zeros(len(feature_names_B))
+
+            # 10-fold CV (手動展開)
+            skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=i)
+            
+            fold_prec0, fold_rec0, fold_f0 = [], [], []
+            fold_prec1, fold_rec1, fold_f1_ = [], [], []
+            
+            iteration_importances_B = np.zeros(len(feature_names_B))
+
+            for fold_idx, (train_index, test_index) in enumerate(skf.split(X_bal, y_bal)):
+                X_train, X_test = X_bal.iloc[train_index], X_bal.iloc[test_index]
+                y_train, y_test = y_bal.iloc[train_index], y_bal.iloc[test_index]
+
+                clf = RandomForestClassifier(n_estimators=100, random_state=i)
+                clf.fit(X_train, y_train)
+                y_pred = clf.predict(X_test)
+
+                # 重要度加算
+                if hasattr(clf, 'feature_importances_'):
+                    iteration_importances_B += clf.feature_importances_
+
+                # 評価
+                fold_prec0.append(precision_score(y_test, y_pred, pos_label=0, zero_division=0))
+                fold_rec0.append(recall_score(y_test, y_pred, pos_label=0, zero_division=0))
+                fold_f0.append(f1_score(y_test, y_pred, pos_label=0, zero_division=0))
+                fold_prec1.append(precision_score(y_test, y_pred, pos_label=1, zero_division=0))
+                fold_rec1.append(recall_score(y_test, y_pred, pos_label=1, zero_division=0))
+                fold_f1_.append(f1_score(y_test, y_pred, pos_label=1, zero_division=0))
 
             avg_p0 = np.mean(fold_prec0)
             avg_r0 = np.mean(fold_rec0)
@@ -422,10 +457,6 @@ def main():
             avg_r1 = np.mean(fold_rec1)
             avg_f1_ = np.mean(fold_f1_)
 
-            print(f"\n[iteration {i}] 10fold平均 (Merge3and4)")
-            print(f"  クラス0(FALSE): P={avg_p0:.4f}, R={avg_r0:.4f}, F={avg_f0:.4f}")
-            print(f"  クラス1(TRUE):  P={avg_p1:.4f}, R={avg_r1:.4f}, F={avg_f1_:.4f}")
-
             iteration_prec0_list_B.append(avg_p0)
             iteration_rec0_list_B.append(avg_r0)
             iteration_f0_list_B.append(avg_f0)
@@ -433,7 +464,16 @@ def main():
             iteration_rec1_list_B.append(avg_r1)
             iteration_f1_list_B.append(avg_f1_)
 
-            # CSVに iteration単位の平均を追加
+            # 重要度の平均化と表示
+            avg_iter_imp_B = iteration_importances_B / 10.0
+            final_feature_importances_B += avg_iter_imp_B
+
+            print(f"\n[iteration {i}] 10fold平均 (Merge3and4)")
+            print(f"  クラス0(FALSE): P={avg_p0:.4f}, R={avg_r0:.4f}, F={avg_f0:.4f}")
+            print(f"  クラス1(TRUE):  P={avg_p1:.4f}, R={avg_r1:.4f}, F={avg_f1_:.4f}")
+            
+            print_feature_importance(avg_iter_imp_B, feature_names_B, title=f"Iter {i} Importance (Merge3&4)")
+
             with open(output_csv, 'a', newline='', encoding='utf-8-sig') as f_out:
                 writer = csv.writer(f_out)
                 writer.writerow([
@@ -459,9 +499,14 @@ def main():
         final_r1_B = np.mean(iteration_rec1_list_B)
         final_f1_B = np.mean(iteration_f1_list_B)
 
+        # 最終重要度表示
+        avg_final_imp_B = final_feature_importances_B / n_repeat
+
         print(f"\n=== (Merge3and4) {feature_set['name']} : 全iteration(10回)の平均 ===")
         print(f"  クラス0(FALSE): P={final_p0_B:.4f}, R={final_r0_B:.4f}, F={final_f0_B:.4f}")
         print(f"  クラス1(TRUE):  P={final_p1_B:.4f}, R={final_r1_B:.4f}, F={final_f1_B:.4f}")
+        
+        print_feature_importance(avg_final_imp_B, feature_names_B, title=f"FINAL AVG Importance (Merge3&4)")
 
         with open(output_csv, 'a', newline='', encoding='utf-8-sig') as f_out:
             writer = csv.writer(f_out)
@@ -479,7 +524,6 @@ def main():
                 "クラス1(TRUE)",
                 final_p1_B, final_r1_B, final_f1_B
             ])
-
 
 if __name__ == "__main__":
     main()
