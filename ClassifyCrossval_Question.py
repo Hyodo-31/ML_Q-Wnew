@@ -54,7 +54,7 @@ selectedParameters = [
 	#(21, 'totalGroupFormed'),    # 何回単語群ができたか
 	#(22, 'maxGroupDuration'),    # 単語群の最大維持時間
 	#(23, 'minGroupDuration'),    # 単語群の最小維持時間
-	#24, 'groupSizeCount_2'),    # 2語の単語群作成数
+	#(24, 'groupSizeCount_2'),    # 2語の単語群作成数
 	#(25, 'groupSizeCount_3'),    # 3語の単語群作成数
 	#(26, 'groupSizeCount_4'),    # 4語の単語群作成数
 	#(27, 'groupSizeCount_5plus'), # 5語以上（必要に応じてコメントアウト解除）
